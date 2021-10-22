@@ -2,10 +2,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -55,13 +57,14 @@ func main() {
 	execGitCommand([]string{"remote", "update"})
 	execGitCommand([]string{"merge", "--no-ff", "--no-commit", mr.SHA})
 
-	// After merging, clone submodules if git submodules file is present
 	if request.Source.Submodules != "none" && fileExists(".gitmodules") {
-		var sourceGitlabHost = request.Source.GetGitlabServerDomain()
-
-		var targetGitlabHost = "gitlab-ci-token:" + request.Source.PrivateToken + "@" + sourceGitlabHost
-
-		execSedCommand([]string{"-i", "s/" + sourceGitlabHost + "/" + targetGitlabHost + "/g", ".gitmodules"})
+		f, err := os.Create(filepath.Join(os.Getenv("HOME"), ".netrc"))
+		if err != nil {
+			common.Fatal("Creating .netrc", err)
+		}
+		for _, cred := range request.Source.SubmoduleCreds {
+			f.Write([]byte(fmt.Sprintf("machine %s login %s password %s\n", cred.Host, cred.Username, cred.Password)))
+		}
 		execGitCommand([]string{"submodule", "update", "--quiet", "--init", "--recursive"})
 	}
 
@@ -79,10 +82,6 @@ func fileExists(filename string) bool {
 		return false
 	}
 	return !info.IsDir()
-}
-
-func execSedCommand(args []string) {
-	execCommand("sed", args)
 }
 
 func execGitCommand(args []string) {

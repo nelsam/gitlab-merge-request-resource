@@ -19,6 +19,11 @@ type Source struct {
 	Labels             []string `json:"labels,omitempty"`
 	TargetBranch       string   `json:"target_branch,omitempty"`
 	Submodules         string   `json:"submodules"`
+	SubmoduleCreds     []struct {
+		Host     string `json:"host"`
+		Username string `json:"username"`
+		Password string `json:"password"`
+	} `json:"submodule_credentials"`
 }
 
 type Version struct {

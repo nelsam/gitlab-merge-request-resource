@@ -3,20 +3,22 @@ package gitlab_merge_request_test
 import (
 	"bytes"
 	"encoding/json"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 
-	"github.com/samcontesse/gitlab-merge-request-resource"
-	"github.com/samcontesse/gitlab-merge-request-resource/out"
-	"github.com/xanzy/go-gitlab"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
 	"log"
 	"net/url"
 	"path"
+
+	resource "github.com/samcontesse/gitlab-merge-request-resource"
+	"github.com/samcontesse/gitlab-merge-request-resource/out"
+	"github.com/xanzy/go-gitlab"
 )
 
 var (

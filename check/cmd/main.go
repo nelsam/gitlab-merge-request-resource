@@ -2,13 +2,14 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/samcontesse/gitlab-merge-request-resource"
-	"github.com/samcontesse/gitlab-merge-request-resource/check"
-	"github.com/samcontesse/gitlab-merge-request-resource/common"
-	"github.com/xanzy/go-gitlab"
 	"os"
 	"strings"
 	"time"
+
+	resource "github.com/samcontesse/gitlab-merge-request-resource"
+	"github.com/samcontesse/gitlab-merge-request-resource/check"
+	"github.com/samcontesse/gitlab-merge-request-resource/common"
+	"github.com/xanzy/go-gitlab"
 )
 
 func main() {
