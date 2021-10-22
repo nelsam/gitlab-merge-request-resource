@@ -10,6 +10,7 @@ import (
 type Source struct {
 	URI                string   `json:"uri"`
 	PrivateToken       string   `json:"private_token"`
+	PrivateKey         string   `json:"private_key"`
 	Insecure           bool     `json:"insecure"`
 	SkipWorkInProgress bool     `json:"skip_work_in_progress,omitempty"`
 	SkipNotMergeable   bool     `json:"skip_not_mergeable,omitempty"`

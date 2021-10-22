@@ -1,4 +1,4 @@
-FROM golang:1.13-stretch AS builder
+FROM golang:1.16-stretch AS builder
 
 WORKDIR /go/src/github.com/samcontesse/gitlab-merge-request-resource/
 

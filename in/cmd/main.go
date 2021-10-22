@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"net/url"
 	"os"
@@ -17,8 +19,57 @@ import (
 	"github.com/xanzy/go-gitlab"
 )
 
-func main() {
+func setupSSHKey(src resource.Source) error {
+	if src.PrivateKey == "" {
+		return nil
+	}
+	sshDir := filepath.Join(os.Getenv("HOME"), ".ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil && !errors.Is(err, fs.ErrExist) {
+		return fmt.Errorf("failed to create ssh directory: %w", err)
+	}
+	privKeyPath := filepath.Join(sshDir, "privkey")
+	f, err := os.Create(privKeyPath)
+	if err != nil {
+		return fmt.Errorf("failed to create ssh key file: %w", err)
+	}
+	defer f.Close()
 
+	if err := f.Chmod(0600); err != nil {
+		return fmt.Errorf("failed to change permissions of private key file: %w", err)
+	}
+	key := []byte(src.PrivateKey)
+	for len(key) > 0 {
+		n, err := f.Write(key)
+		if err != nil {
+			return fmt.Errorf("failed to write private key to file: %w", err)
+		}
+		key = key[n:]
+	}
+
+	cfgPath := filepath.Join(sshDir, "config")
+	cfg, err := os.Create(cfgPath)
+	if err != nil {
+		return fmt.Errorf("failed to create ssh config file: %w", err)
+	}
+	defer cfg.Close()
+	b := []byte(fmt.Sprintf(`
+StrictHostKeyChecking no
+LogLevel quiet
+
+Host gitlab.com
+    IdentityFile %s
+`, privKeyPath))
+	for len(b) > 0 {
+		n, err := cfg.Write(b)
+		if err != nil {
+			return fmt.Errorf("failed to write ssh config: %w", err)
+		}
+		b = b[n:]
+	}
+	return nil
+}
+
+func main() {
 	if len(os.Args) < 2 {
 		println("usage: " + os.Args[0] + " <destination>")
 		os.Exit(1)
@@ -43,17 +94,21 @@ func main() {
 
 	mr.UpdatedAt = request.Version.UpdatedAt
 
-	target := createRepositoryUrl(api, mr.TargetProjectID, request.Source.PrivateToken)
-	source := createRepositoryUrl(api, mr.SourceProjectID, request.Source.PrivateToken)
+	if err := setupSSHKey(request.Source); err != nil {
+		common.Fatal("setting up ssh private key", err)
+	}
+
+	target := createRepositoryUrl(api, mr.TargetProjectID, request.Source.PrivateToken, request.Source.PrivateKey != "")
+	source := createRepositoryUrl(api, mr.SourceProjectID, request.Source.PrivateToken, request.Source.PrivateKey != "")
 
 	commit, _, err := api.Commits.GetCommit(mr.SourceProjectID, mr.SHA)
 	if err != nil {
 		common.Fatal("listing merge request commits", err)
 	}
 
-	execGitCommand([]string{"clone", "-c", "http.sslVerify=" + strconv.FormatBool(!request.Source.Insecure), "-o", "target", "-b", mr.TargetBranch, target.String(), destination})
+	execGitCommand([]string{"clone", "-c", "http.sslVerify=" + strconv.FormatBool(!request.Source.Insecure), "-o", "target", "-b", mr.TargetBranch, target, destination})
 	os.Chdir(destination)
-	execGitCommand([]string{"remote", "add", "source", source.String()})
+	execGitCommand([]string{"remote", "add", "source", source})
 	execGitCommand([]string{"remote", "update"})
 	execGitCommand([]string{"merge", "--no-ff", "--no-commit", mr.SHA})
 
@@ -98,18 +153,21 @@ func execCommand(cmd string, args []string) {
 	}
 }
 
-func createRepositoryUrl(api *gitlab.Client, pid int, token string) *url.URL {
+func createRepositoryUrl(api *gitlab.Client, pid int, token string, useSSH bool) string {
 	project, _, err := api.Projects.GetProject(pid, &gitlab.GetProjectOptions{})
 	if err != nil {
 		common.Fatal("reading project from api", err)
 	}
+	if useSSH {
+		return project.SSHURLToRepo
+	}
 
 	u, err := url.Parse(project.HTTPURLToRepo)
 	if err != nil {
-		common.Fatal("parsing repository url", err)
+		common.Fatal("parsing repository http url", err)
 	}
 	u.User = url.UserPassword("gitlab-ci-token", token)
-	return u
+	return u.String()
 }
 
 func buildMetadata(mr *gitlab.MergeRequest, commit *gitlab.Commit) resource.Metadata {
