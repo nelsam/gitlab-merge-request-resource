@@ -44,7 +44,7 @@ func main() {
 	for _, mr := range requests {
 
 		commit, _, err := api.Commits.GetCommit(mr.ProjectID, mr.SHA)
-		updatedAt := commit.CommittedDate
+		updatedAt := latest(nil, commit.CommittedDate, mr.CreatedAt)
 
 		if err != nil {
 			continue
@@ -56,7 +56,7 @@ func main() {
 
 		if !request.Source.SkipTriggerComment {
 			notes, _, _ := api.Notes.ListMergeRequestNotes(mr.ProjectID, mr.IID, &gitlab.ListMergeRequestNotesOptions{})
-			updatedAt = getMostRecentUpdateTime(notes, updatedAt)
+			updatedAt = latest(notes, updatedAt)
 		}
 
 		if request.Source.SkipNotMergeable && mr.MergeStatus != "can_be_merged" {
@@ -90,11 +90,23 @@ func main() {
 
 }
 
-func getMostRecentUpdateTime(notes []*gitlab.Note, updatedAt *time.Time) *time.Time {
+func latest(notes []*gitlab.Note, ts ...*time.Time) *time.Time {
 	for _, note := range notes {
-		if strings.Contains(note.Body, "[trigger ci]") && updatedAt.Before(*note.UpdatedAt) {
-			return note.UpdatedAt
+		if !strings.Contains(note.Body, "[trigger ci]") {
+			continue
 		}
+		ts = append(ts, note.UpdatedAt)
 	}
-	return updatedAt
+	var latest time.Time
+	for _, tPtr := range ts {
+		if tPtr == nil {
+			continue
+		}
+		t := *tPtr
+		if latest.After(t) {
+			continue
+		}
+		latest = t
+	}
+	return &latest
 }
